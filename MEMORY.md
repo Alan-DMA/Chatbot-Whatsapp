@@ -20,6 +20,7 @@ Memoria del proyecto entre sesiones. Máximo ~50 líneas: resume o elimina lo qu
 - `GET /webhook` debe responder con `hub.challenge` plano (string), nunca serializado como JSON.
 - Asegurar que `POST /webhook` retorne inmediatamente 200 OK aun si el payload no contiene mensajes nuevos.
 - **Suscripción de WABA obligatoria:** En WhatsApp Cloud API no basta con registrar el Webhook en la App; se debe invocar `POST /{WABA_ID}/subscribed_apps` con el token para que Meta despache los mensajes entrantes al webhook.
+- **Token Permanente:** Se debe usar un System User con permisos `whatsapp_business_messaging` y vigencia "Nunca" en Meta Business Suite para evitar caducidad a las 24 horas.
 - Render Free Tier entra en sleep a los 15 min; monitoreo cada 14 min hacia `/ping` o `/health` garantiza actividad continua.
 
 ## Próximos pasos
