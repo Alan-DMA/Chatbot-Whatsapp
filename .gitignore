@@ -1,0 +1,30 @@
+# Entornos virtuales
+.venv/
+venv/
+ENV/
+
+# Variables de entorno y secretos (NUNCA SUBIR)
+.env
+*.env.local
+
+# Caché de Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Pruebas y cobertura
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Logs y temporales
+*.log
+*.tmp
+temp/
+scratch/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
