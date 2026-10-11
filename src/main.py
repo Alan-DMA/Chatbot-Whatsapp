@@ -36,6 +36,11 @@ async def health_check():
     """Ruta para monitoreo externo (UptimeRobot) y comprobación de estado de Render."""
     return {"status": "ok", "service": "whatsapp-gemini-chatbot"}
 
+@app.get("/ping", status_code=status.HTTP_200_OK)
+async def ping():
+    """Ruta ultraligera para UptimeRobot (evita modo sleep cada 14 min sin sobrecargar el servidor)."""
+    return {"status": "alive"}
+
 @app.get("/webhook")
 async def verify_webhook(
     hub_mode: str = Query(None, alias="hub.mode"),

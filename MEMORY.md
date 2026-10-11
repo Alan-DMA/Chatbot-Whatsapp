@@ -23,5 +23,5 @@ Memoria del proyecto entre sesiones. Máximo ~50 líneas: resume o elimina lo qu
 - Para evitar que la instancia Free Tier de Render entre en reposo (sleep) tras 15 min de inactividad, configurar UptimeRobot con pings cada 14 min hacia `/health`.
 
 ## Próximos pasos
-- Configurar UptimeRobot apuntando a `https://chatbot-whatsapp-614d.onrender.com/health` (ping cada 14 min).
-- Actualizar Webhook de Meta con el dominio de Render.
+- Spec 004 redactada en borrador (`specs/004-alta-disponibilidad-y-optimizacion-continua/spec.md`). Pendiente visto bueno para redactar plan técnico y tareas.
+- Monitoreo UptimeRobot cada 14 min a `/ping` en producción.
