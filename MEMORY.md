@@ -3,8 +3,7 @@ Memoria del proyecto entre sesiones. Máximo ~50 líneas: resume o elimina lo qu
 
 ## Estado actual
 - Spec 001 y Spec 002 completadas al 100%.
-- Capacidad multimodal completa implementada: recepción de texto, imágenes (con o sin pie de foto) y notas de voz.
-- Flujo de audio simétrico: notas de voz entrantes se responden con notas de voz sintetizadas (gTTS -> OGG Opus -> Meta Upload -> WhatsApp audio).
+- Spec 003 en curso: T1 y T2 completadas (`Dockerfile`, `.dockerignore`, `.gitignore`, repo Git inicializado y commiteado con 0 fugas de secretos).
 - 26 pruebas automatizadas pasando (100% verde).
 
 ## Decisiones (y por qué)
@@ -14,6 +13,7 @@ Memoria del proyecto entre sesiones. Máximo ~50 líneas: resume o elimina lo qu
 - Síntesis y notas de voz nativas: `convert_text_to_whatsapp_voice_note` genera audio con `gTTS` y lo transcodifica a Opus con `ffmpeg` (`libopus`, 32k VBR) para que WhatsApp lo reconozca como nota de voz reproducible.
 - Subida de medios a Meta: `upload_media_file` sube el audio generado mediante `POST /{phone_number_id}/media` y `send_whatsapp_audio_message` lo envía.
 - Limpieza atómica: `cleanup_files` elimina archivos de entrada, salida y temporales intermedios en bloque `finally`.
+- Contenedor con puerto dinámico: `Dockerfile` ejecuta `uvicorn` resolviendo `${PORT:-8000}` para compatibilidad total con Render Free Tier.
 
 ## Aprendizajes y errores a evitar
 - `GET /webhook` debe responder con `hub.challenge` plano (string), nunca serializado como JSON.
@@ -22,5 +22,5 @@ Memoria del proyecto entre sesiones. Máximo ~50 líneas: resume o elimina lo qu
 - Para túneles locales en desarrollo, Cloudflare Tunnel (`cloudflared`) evita bloqueos de páginas intermedias que ocurren con localtunnel.
 
 ## Próximos pasos
-- Spec 003 redactada en borrador (`specs/003-contenerizacion-y-despliegue-en-la-nube/spec.md`). Pendiente aprobación para redactar el plan técnico y tareas.
-- Prueba en vivo con notas de voz e imágenes desde WhatsApp.
+- Spec 003 T3: Subir código a repositorio de GitHub y conectar a Render Web Service.
+- Spec 003 T4: Configurar variables de entorno en Render y apuntar Webhook de Meta al dominio de Render.
