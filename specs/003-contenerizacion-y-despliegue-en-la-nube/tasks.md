@@ -2,7 +2,7 @@
 
 - [x] **T1. Configuración de Dockerfile y .dockerignore.** RF-1, RF-2, RF-3
   - Hecho cuando: Existan `Dockerfile` con instalación de `ffmpeg` y arranque dinámico con `$PORT`, y `.dockerignore` excluyendo `.env` y archivos temporales.
-- [ ] **T2. Aseguramiento de repositorio Git y .gitignore.** RF-5, RNF-1
+- [x] **T2. Aseguramiento de repositorio Git y .gitignore.** RF-5, RNF-1
   - Hecho cuando: `.gitignore` garantice la exclusión de `.env` y archivos no versionables, el repositorio local esté inicializado con un commit limpio listo para GitHub.
 - [ ] **T3. Subida a GitHub y vinculación con Render Web Service.** RF-4, RF-5
   - Hecho cuando: El código esté alojado en un repositorio de GitHub y conectado a Render configurando las variables de entorno de producción.
