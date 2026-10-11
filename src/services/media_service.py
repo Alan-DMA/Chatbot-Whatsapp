@@ -10,7 +10,7 @@ async def get_media_url(media_id: str, access_token: Optional[str] = None) -> Di
     Obtiene la URL temporal y metadatos de un archivo multimedia usando su Media ID en Meta Graph API.
     """
     settings = get_settings()
-    token = access_token or settings.whatsapp_token
+    token = access_token or settings.WHATSAPP_TOKEN
 
     url = f"{META_GRAPH_URL}/{media_id}"
     headers = {"Authorization": f"Bearer {token}"}
@@ -25,7 +25,7 @@ async def download_media_file(media_url: str, destination_path: str, access_toke
     Descarga el archivo binario desde la URL temporal de Meta y lo guarda en destination_path.
     """
     settings = get_settings()
-    token = access_token or settings.whatsapp_token
+    token = access_token or settings.WHATSAPP_TOKEN
 
     headers = {"Authorization": f"Bearer {token}"}
 
