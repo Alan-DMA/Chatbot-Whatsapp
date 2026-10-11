@@ -7,10 +7,13 @@ from src.config import get_settings
 from src.services.gemini_service import (
     generate_gemini_text_response,
     generate_gemini_multimodal_response,
+    generate_gemini_image,
+    process_user_message_intent,
 )
 from src.services.whatsapp_service import (
     send_whatsapp_text_message,
     send_whatsapp_audio_message,
+    send_whatsapp_image_message,
     upload_media_file,
 )
 from src.services.media_service import (
@@ -93,14 +96,48 @@ async def receive_webhook(request: Request) -> Dict[str, str]:
                 if msg_type == "text":
                     text_body = message.get("text", {}).get("body", "")
                     if text_body:
-                        gemini_reply = await generate_gemini_text_response(prompt=text_body)
-                        try:
-                            await send_whatsapp_text_message(
-                                to_phone_number=from_phone,
-                                text=gemini_reply
-                            )
-                        except Exception as wa_err:
-                            logger.error(f"Error al enviar mensaje de texto a WhatsApp: {wa_err}", exc_info=True)
+                        intent = await process_user_message_intent(text=text_body)
+                        if intent.get("generate_image") is True:
+                            temp_files = []
+                            try:
+                                img_prompt = intent.get("image_prompt", text_body)
+                                caption = intent.get("caption")
+                                img_bytes = await generate_gemini_image(prompt=img_prompt)
+
+                                temp_img = tempfile.NamedTemporaryFile(suffix=".jpg", delete=False)
+                                temp_img_path = temp_img.name
+                                temp_img.write(img_bytes)
+                                temp_img.close()
+                                temp_files.append(temp_img_path)
+
+                                uploaded_id = await upload_media_file(file_path=temp_img_path, mime_type="image/jpeg")
+                                await send_whatsapp_image_message(
+                                    to_phone_number=from_phone,
+                                    media_id=uploaded_id,
+                                    caption=caption
+                                )
+                            except Exception as gen_err:
+                                logger.error(f"Error generando o enviando imagen en WhatsApp: {gen_err}", exc_info=True)
+                                try:
+                                    await send_whatsapp_text_message(
+                                        to_phone_number=from_phone,
+                                        text="Disculpa, tuve un inconveniente al generar la imagen solicitada. Por favor, intenta de nuevo con otra descripción."
+                                    )
+                                except Exception:
+                                    pass
+                            finally:
+                                cleanup_files(*temp_files)
+                        else:
+                            gemini_reply = intent.get("reply")
+                            if not gemini_reply:
+                                gemini_reply = await generate_gemini_text_response(prompt=text_body)
+                            try:
+                                await send_whatsapp_text_message(
+                                    to_phone_number=from_phone,
+                                    text=gemini_reply
+                                )
+                            except Exception as wa_err:
+                                logger.error(f"Error al enviar mensaje de texto a WhatsApp: {wa_err}", exc_info=True)
 
                 elif msg_type == "image":
                     image_data = message.get("image", {})

@@ -1,6 +1,6 @@
 import os
 import httpx
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 from src.config import get_settings
 
 META_GRAPH_API_VERSION = "v21.0"
@@ -86,6 +86,42 @@ async def send_whatsapp_audio_message(to_phone_number: str, media_id: str) -> Di
         "audio": {
             "id": media_id
         }
+    }
+
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        response = await client.post(url, json=payload, headers=headers)
+        response.raise_for_status()
+        return response.json()
+
+async def send_whatsapp_image_message(
+    to_phone_number: str,
+    media_id: str,
+    caption: Optional[str] = None
+) -> Dict[str, Any]:
+    """
+    Envía un mensaje de tipo imagen a través de WhatsApp Cloud API utilizando su Media ID y un caption opcional.
+    Endpoint: POST https://graph.facebook.com/v21.0/{PHONE_NUMBER_ID}/messages
+    """
+    settings = get_settings()
+    url = f"https://graph.facebook.com/{META_GRAPH_API_VERSION}/{settings.PHONE_NUMBER_ID}/messages"
+
+    headers = {
+        "Authorization": f"Bearer {settings.WHATSAPP_TOKEN}",
+        "Content-Type": "application/json"
+    }
+
+    image_payload: Dict[str, Any] = {
+        "id": media_id
+    }
+    if caption:
+        image_payload["caption"] = caption
+
+    payload = {
+        "messaging_product": "whatsapp",
+        "recipient_type": "individual",
+        "to": to_phone_number,
+        "type": "image",
+        "image": image_payload
     }
 
     async with httpx.AsyncClient(timeout=10.0) as client:

@@ -74,10 +74,10 @@ META_STATUS_UPDATE_PAYLOAD = {
 
 @pytest.mark.asyncio
 async def test_webhook_post_text_message_end_to_end():
-    with patch("src.main.generate_gemini_text_response", new_callable=AsyncMock) as mock_gemini, \
+    with patch("src.main.process_user_message_intent", new_callable=AsyncMock) as mock_intent, \
          patch("src.main.send_whatsapp_text_message", new_callable=AsyncMock) as mock_send_whatsapp:
 
-        mock_gemini.return_value = "Estoy muy bien, gracias por preguntar."
+        mock_intent.return_value = {"generate_image": False, "reply": "Estoy muy bien, gracias por preguntar."}
         mock_send_whatsapp.return_value = {"messages": [{"id": "wamid.resp..."}]}
 
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
@@ -86,8 +86,8 @@ async def test_webhook_post_text_message_end_to_end():
         assert response.status_code == 200
         assert response.json() == {"status": "ok"}
 
-        # Verificar que se extrajo el mensaje y se llamó a Gemini
-        mock_gemini.assert_called_once_with(prompt="¿Cómo estás hoy?")
+        # Verificar que se extrajo el mensaje y se evaluó la intención
+        mock_intent.assert_called_once_with(text="¿Cómo estás hoy?")
 
         # Verificar que la respuesta de Gemini se envió al destinatario correcto
         mock_send_whatsapp.assert_called_once_with(
@@ -214,5 +214,60 @@ async def test_webhook_post_audio_message_success(tmp_path):
         mock_tts.assert_called_once()
         mock_upload.assert_called_once()
         mock_send_audio.assert_called_once_with(to_phone_number="5491123456789", media_id="media_reply_999")
+        mock_cleanup.assert_called_once()
+
+@pytest.mark.asyncio
+async def test_webhook_post_text_message_triggers_image_generation():
+    with patch("src.main.process_user_message_intent", new_callable=AsyncMock) as mock_intent, \
+         patch("src.main.generate_gemini_image", new_callable=AsyncMock) as mock_gen_img, \
+         patch("src.main.upload_media_file", new_callable=AsyncMock) as mock_upload, \
+         patch("src.main.send_whatsapp_image_message", new_callable=AsyncMock) as mock_send_img, \
+         patch("src.main.cleanup_files") as mock_cleanup:
+
+        mock_intent.return_value = {
+            "generate_image": True,
+            "image_prompt": "a cosmic cat floating in space",
+            "caption": "¡Aquí tienes tu gato espacial! 🐱🚀"
+        }
+        mock_gen_img.return_value = b"fake_cat_image_bytes"
+        mock_upload.return_value = "media_cat_img_123"
+        mock_send_img.return_value = {"messages": [{"id": "wamid.img_msg"}]}
+
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+            response = await ac.post("/webhook", json=META_TEXT_MESSAGE_PAYLOAD)
+
+        assert response.status_code == 200
+        mock_intent.assert_called_once_with(text="¿Cómo estás hoy?")
+        mock_gen_img.assert_called_once_with(prompt="a cosmic cat floating in space")
+        mock_upload.assert_called_once()
+        mock_send_img.assert_called_once_with(
+            to_phone_number="5491123456789",
+            media_id="media_cat_img_123",
+            caption="¡Aquí tienes tu gato espacial! 🐱🚀"
+        )
+        mock_cleanup.assert_called_once()
+
+@pytest.mark.asyncio
+async def test_webhook_post_text_message_image_generation_failure_fallback():
+    with patch("src.main.process_user_message_intent", new_callable=AsyncMock) as mock_intent, \
+         patch("src.main.generate_gemini_image", new_callable=AsyncMock) as mock_gen_img, \
+         patch("src.main.send_whatsapp_text_message", new_callable=AsyncMock) as mock_send_text, \
+         patch("src.main.cleanup_files") as mock_cleanup:
+
+        mock_intent.return_value = {
+            "generate_image": True,
+            "image_prompt": "a futuristic car",
+            "caption": "Tu coche"
+        }
+        mock_gen_img.side_effect = Exception("Imagen 3 generation failed")
+
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+            response = await ac.post("/webhook", json=META_TEXT_MESSAGE_PAYLOAD)
+
+        assert response.status_code == 200
+        mock_gen_img.assert_called_once()
+        mock_send_text.assert_called_once()
+        call_args = mock_send_text.call_args[1]
+        assert "Disculpa" in call_args["text"] or "dificultad" in call_args["text"] or "inconveniente" in call_args["text"]
         mock_cleanup.assert_called_once()
 

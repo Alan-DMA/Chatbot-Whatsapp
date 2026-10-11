@@ -115,3 +115,59 @@ async def test_send_whatsapp_audio_message_success(monkeypatch):
         assert call_kwargs["json"]["type"] == "audio"
         assert call_kwargs["json"]["audio"]["id"] == "media_uploaded_999"
 
+@pytest.mark.asyncio
+async def test_send_whatsapp_image_message_success(monkeypatch):
+    monkeypatch.setenv("WHATSAPP_TOKEN", "fake_token_123")
+    monkeypatch.setenv("PHONE_NUMBER_ID", "10987654321")
+    from src.config import get_settings
+    get_settings.cache_clear()
+    from src.services.whatsapp_service import send_whatsapp_image_message
+
+    dummy_request = httpx.Request("POST", "https://graph.facebook.com/v21.0/10987654321/messages")
+    mock_response = httpx.Response(
+        status_code=200,
+        json={"messages": [{"id": "wamid.img123"}]},
+        request=dummy_request
+    )
+
+    with patch("httpx.AsyncClient.post", new_callable=AsyncMock) as mock_post:
+        mock_post.return_value = mock_response
+        res = await send_whatsapp_image_message(
+            to_phone_number="123456789",
+            media_id="media_img_999",
+            caption="Aquí tienes tu imagen"
+        )
+        assert res["messages"][0]["id"] == "wamid.img123"
+        mock_post.assert_called_once()
+        call_kwargs = mock_post.call_args[1]
+        assert call_kwargs["json"]["type"] == "image"
+        assert call_kwargs["json"]["image"]["id"] == "media_img_999"
+        assert call_kwargs["json"]["image"]["caption"] == "Aquí tienes tu imagen"
+
+@pytest.mark.asyncio
+async def test_send_whatsapp_image_message_without_caption(monkeypatch):
+    monkeypatch.setenv("WHATSAPP_TOKEN", "fake_token_123")
+    monkeypatch.setenv("PHONE_NUMBER_ID", "10987654321")
+    from src.config import get_settings
+    get_settings.cache_clear()
+    from src.services.whatsapp_service import send_whatsapp_image_message
+
+    dummy_request = httpx.Request("POST", "https://graph.facebook.com/v21.0/10987654321/messages")
+    mock_response = httpx.Response(
+        status_code=200,
+        json={"messages": [{"id": "wamid.img124"}]},
+        request=dummy_request
+    )
+
+    with patch("httpx.AsyncClient.post", new_callable=AsyncMock) as mock_post:
+        mock_post.return_value = mock_response
+        res = await send_whatsapp_image_message(
+            to_phone_number="123456789",
+            media_id="media_img_999"
+        )
+        assert res["messages"][0]["id"] == "wamid.img124"
+        call_kwargs = mock_post.call_args[1]
+        assert call_kwargs["json"]["type"] == "image"
+        assert call_kwargs["json"]["image"]["id"] == "media_img_999"
+        assert "caption" not in call_kwargs["json"]["image"]
+

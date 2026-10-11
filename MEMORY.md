@@ -2,27 +2,23 @@
 Memoria del proyecto entre sesiones. Máximo ~50 líneas: resume o elimina lo que ya no aporte.
 
 ## Estado actual
-- Specs 001, 002, 003 y 004 completadas al 100%.
-- Bot multimodal activo en Render (`https://chatbot-whatsapp-614d.onrender.com`).
-- Rutas de disponibilidad operativas (`/health` y `/ping`).
-- 28 pruebas automatizadas pasando (100% verde).
+- Specs 001, 002, 003, 004 y 005 completadas al 100%.
+- Bot multimodal con generación visual activo en Render (`https://chatbot-whatsapp-614d.onrender.com`).
+- 37 pruebas automatizadas pasando (100% verde).
 
 ## Decisiones (y por qué)
 - Desacoplamiento modular: `src/config.py`, `src/services/gemini_service.py`, `src/services/whatsapp_service.py`, `src/services/media_service.py`, `src/services/audio_service.py` y `src/main.py`.
-- Flujo asíncrono no bloqueante: Garantiza respuesta HTTP 200 a Meta en < 3s evitando duplicados y timeouts.
-- Inferencia multimodal nativa: `generate_gemini_multimodal_response` usa `genai.types.Part.from_bytes` para imágenes y audios.
-- Síntesis y notas de voz nativas: `convert_text_to_whatsapp_voice_note` genera audio con `gTTS` y lo transcodifica a Opus con `ffmpeg` (`libopus`, 32k VBR).
-- Limpieza atómica: `cleanup_files` elimina archivos de entrada, salida y temporales intermedios en bloque `finally`.
-- Contenedor con puerto dinámico: `Dockerfile` ejecuta `uvicorn` resolviendo `${PORT:-8000}` para compatibilidad nativa con Render.
+- Generación de imágenes: `generate_gemini_image` con Imagen 3 (`imagen-3.0-generate-002`) vía `client.aio.models.generate_images`.
+- Detección de intención unificada: `process_user_message_intent` resuelve si es chat estándar o generación visual en una única llamada, extrayendo prompt optimizado en inglés y caption cordial en español.
+- Despacho multimedia en WhatsApp: `send_whatsapp_image_message` envía imágenes vía Meta Cloud API usando Media ID y caption.
+- Limpieza atómica: `cleanup_files` elimina imágenes generadas temporales en bloque `finally` para estricta higiene de almacenamiento efímero.
 - Resiliencia ante timeouts: Captura de `httpx.TimeoutException` en llamadas a Meta y Gemini sin afectar el ciclo del webhook.
 
 ## Aprendizajes y errores a evitar
+- Modelos estándar como `gemini-2.5-flash` alucinan si se les pide generar imágenes directamente en chat sin tool o pipeline a Imagen 3.
 - `GET /webhook` debe responder con `hub.challenge` plano (string), nunca serializado como JSON.
 - Asegurar que `POST /webhook` retorne inmediatamente 200 OK aun si el payload no contiene mensajes nuevos.
-- **Suscripción de WABA obligatoria:** En WhatsApp Cloud API no basta con registrar el Webhook en la App; se debe invocar `POST /{WABA_ID}/subscribed_apps` con el token para que Meta despache los mensajes entrantes al webhook.
-- **Token Permanente:** Se debe usar un System User con permisos `whatsapp_business_messaging` y vigencia "Nunca" en Meta Business Suite para evitar caducidad a las 24 horas.
 - Render Free Tier entra en sleep a los 15 min; monitoreo cada 14 min hacia `/ping` o `/health` garantiza actividad continua.
 
 ## Próximos pasos
-- Monitoreo activo en UptimeRobot hacia `https://chatbot-whatsapp-614d.onrender.com/health`.
-- Disfrutar del bot en producción con texto, imágenes y notas de voz.
+- Desplegar cambios en Render vía push a GitHub y disfrutar de la generación de imágenes en WhatsApp.
