@@ -25,6 +25,15 @@ from src.services.audio_service import (
     convert_ogg_to_mp3,
     convert_text_to_whatsapp_voice_note,
 )
+from src.services.history_service import (
+    init_history_db,
+    get_conversation_history,
+    add_conversation_turn,
+    clear_conversation_history,
+    is_reset_command,
+)
+
+init_history_db()
 
 logger = logging.getLogger(__name__)
 
@@ -96,7 +105,23 @@ async def receive_webhook(request: Request) -> Dict[str, str]:
                 if msg_type == "text":
                     text_body = message.get("text", {}).get("body", "")
                     if text_body:
-                        intent = await process_user_message_intent(text=text_body)
+                        # 1. Comprobar comando explícito de reinicio de conversación
+                        if is_reset_command(text_body):
+                            clear_conversation_history(phone_number=from_phone)
+                            try:
+                                await send_whatsapp_text_message(
+                                    to_phone_number=from_phone,
+                                    text="¡Listo! He reiniciado nuestra conversación. ¿De qué te gustaría hablar ahora?"
+                                )
+                            except Exception as wa_err:
+                                logger.error(f"Error al enviar confirmación de reset: {wa_err}", exc_info=True)
+                            continue
+
+                        # 2. Recuperar historial activo de la sesión
+                        history = get_conversation_history(phone_number=from_phone)
+
+                        # 3. Procesar intención considerando el historial
+                        intent = await process_user_message_intent(text=text_body, history=history)
                         if intent.get("generate_image") is True:
                             temp_files = []
                             try:
@@ -115,6 +140,12 @@ async def receive_webhook(request: Request) -> Dict[str, str]:
                                     to_phone_number=from_phone,
                                     media_id=uploaded_id,
                                     caption=caption
+                                )
+                                # Registrar turno en el historial
+                                add_conversation_turn(
+                                    phone_number=from_phone,
+                                    user_message=text_body,
+                                    model_response=caption or "Imagen generada"
                                 )
                             except Exception as gen_err:
                                 logger.error(f"Error generando o enviando imagen en WhatsApp: {gen_err}", exc_info=True)
@@ -135,6 +166,12 @@ async def receive_webhook(request: Request) -> Dict[str, str]:
                                 await send_whatsapp_text_message(
                                     to_phone_number=from_phone,
                                     text=gemini_reply
+                                )
+                                # Registrar turno en el historial
+                                add_conversation_turn(
+                                    phone_number=from_phone,
+                                    user_message=text_body,
+                                    model_response=gemini_reply
                                 )
                             except Exception as wa_err:
                                 logger.error(f"Error al enviar mensaje de texto a WhatsApp: {wa_err}", exc_info=True)
@@ -168,6 +205,11 @@ async def receive_webhook(request: Request) -> Dict[str, str]:
 
                             # 3. Enviar respuesta por WhatsApp
                             await send_whatsapp_text_message(to_phone_number=from_phone, text=reply_text)
+                            add_conversation_turn(
+                                phone_number=from_phone,
+                                user_message=caption or "[Imagen]",
+                                model_response=reply_text
+                            )
                         except Exception as img_err:
                             logger.error(f"Error procesando imagen de WhatsApp: {img_err}", exc_info=True)
                         finally:
@@ -220,6 +262,11 @@ async def receive_webhook(request: Request) -> Dict[str, str]:
                             # 5. Subir a Meta y enviar nota de voz
                             uploaded_id = await upload_media_file(file_path=reply_ogg_path, mime_type="audio/ogg; codecs=opus")
                             await send_whatsapp_audio_message(to_phone_number=from_phone, media_id=uploaded_id)
+                            add_conversation_turn(
+                                phone_number=from_phone,
+                                user_message="[Nota de voz]",
+                                model_response=reply_text
+                            )
 
                         except Exception as aud_err:
                             logger.error(f"Error procesando nota de voz de WhatsApp: {aud_err}", exc_info=True)

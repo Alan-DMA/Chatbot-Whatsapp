@@ -1,6 +1,6 @@
 import json
 import logging
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 from google import genai
 from src.config import get_settings
 
@@ -113,11 +113,12 @@ async def generate_gemini_image(
 
 async def process_user_message_intent(
     text: str,
+    history: Optional[List[Dict[str, str]]] = None,
     model: str = "gemini-2.5-flash"
 ) -> Dict[str, Any]:
     """
-    Analiza el mensaje del usuario para detectar si solicita la creación/dibujo de una imagen
-    o si es un mensaje de diálogo estándar.
+    Analiza el mensaje del usuario considerando el historial conversacional previo para detectar
+    si solicita la creación/dibujo de una imagen (o confirma opciones) o si es un diálogo estándar.
     Retorna un diccionario estructurado:
       - Para imagen: {"generate_image": True, "image_prompt": "...", "caption": "..."}
       - Para chat normal: {"generate_image": False, "reply": "..."}
@@ -129,7 +130,7 @@ async def process_user_message_intent(
         }
 
     system_instruction = (
-        "Eres el asistente multimodal inteligente de WhatsApp. Analiza el mensaje del usuario.\n"
+        "Eres el asistente multimodal inteligente de WhatsApp. Analiza el mensaje del usuario y el historial previo si existe.\n"
         "Determina si el usuario está solicitando explícitamente crear, dibujar, generar o ilustrar una imagen, "
         "o si está seleccionando/confirmando una opción visual propuesta anteriormente (ej. 'la opción 2', 'la primera').\n\n"
         "Responde OBLIGATORIAMENTE con un único objeto JSON válido con una de las siguientes dos estructuras:\n\n"
@@ -142,17 +143,25 @@ async def process_user_message_intent(
         "2. Si el usuario NO está pidiendo una imagen (conversación general, dudas, asistencia, etc.):\n"
         "{\n"
         '  "generate_image": false,\n'
-        '  "reply": "Tu respuesta conversacional útil, amable y directa en español"\n'
+        '  "reply": "Tu respuesta conversacional útil, amable y directa en español respetando el contexto previo"\n'
         "}\n\n"
         "IMPORTANTE: No añadas texto explicativo fuera del JSON ni bloques markdown que impidan el parseo."
     )
+
+    history_block = ""
+    if history:
+        lines = []
+        for turn in history:
+            role_label = "Usuario" if turn.get("role") == "user" else "Asistente"
+            lines.append(f"{role_label}: {turn.get('content', '')}")
+        history_block = "Historial reciente de la conversación:\n" + "\n".join(lines) + "\n\n"
 
     client = get_genai_client()
     raw_text = ""
     try:
         response = await client.aio.models.generate_content(
             model=model,
-            contents=f"{system_instruction}\n\nMensaje del usuario:\n{text.strip()}"
+            contents=f"{system_instruction}\n\n{history_block}Mensaje actual del usuario:\n{text.strip()}"
         )
         raw_text = response.text.strip() if response and response.text else ""
 

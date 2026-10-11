@@ -155,3 +155,32 @@ async def test_process_user_message_intent_fallback_on_invalid_json(monkeypatch)
         assert intent["generate_image"] is False
         assert intent["reply"] == "Claro, puedo ayudarte con cualquier consulta que tengas."
 
+@pytest.mark.asyncio
+async def test_process_user_message_intent_with_history(monkeypatch):
+    monkeypatch.setenv("GEMINI_API_KEY", "fake_gemini_api_key_123")
+    from src.config import get_settings
+    get_settings.cache_clear()
+    from src.services.gemini_service import process_user_message_intent
+
+    mock_client = MagicMock()
+    mock_response = MagicMock()
+    mock_response.text = '{"generate_image": true, "image_prompt": "a dog in space", "caption": "¡Aquí tienes la opción 2! 🐶"}'
+    mock_client.aio.models.generate_content = AsyncMock(return_value=mock_response)
+
+    history = [
+        {"role": "user", "content": "Dame opciones para dibujar"},
+        {"role": "model", "content": "1. Gato astronauta. 2. Perro espacial."}
+    ]
+
+    with patch("src.services.gemini_service.get_genai_client", return_value=mock_client):
+        intent = await process_user_message_intent(text="La opción 2", history=history)
+        assert intent["generate_image"] is True
+        assert intent["image_prompt"] == "a dog in space"
+
+        # Verificar que el historial se incluyó en la llamada a Gemini
+        call_kwargs = mock_client.aio.models.generate_content.call_args[1]
+        sent_contents = call_kwargs["contents"]
+        assert "Gato astronauta" in sent_contents
+        assert "Perro espacial" in sent_contents
+        assert "La opción 2" in sent_contents
+

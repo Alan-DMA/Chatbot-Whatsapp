@@ -1,7 +1,14 @@
 import pytest
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, patch, ANY
 from httpx import ASGITransport, AsyncClient
 from src.main import app
+
+@pytest.fixture(autouse=True)
+def clean_test_history():
+    from src.services.history_service import clear_conversation_history
+    clear_conversation_history("5491123456789")
+    yield
+    clear_conversation_history("5491123456789")
 
 # Payload típico que envía Meta al recibir un mensaje de texto
 META_TEXT_MESSAGE_PAYLOAD = {
@@ -87,7 +94,7 @@ async def test_webhook_post_text_message_end_to_end():
         assert response.json() == {"status": "ok"}
 
         # Verificar que se extrajo el mensaje y se evaluó la intención
-        mock_intent.assert_called_once_with(text="¿Cómo estás hoy?")
+        mock_intent.assert_called_once_with(text="¿Cómo estás hoy?", history=ANY)
 
         # Verificar que la respuesta de Gemini se envió al destinatario correcto
         mock_send_whatsapp.assert_called_once_with(
@@ -237,7 +244,7 @@ async def test_webhook_post_text_message_triggers_image_generation():
             response = await ac.post("/webhook", json=META_TEXT_MESSAGE_PAYLOAD)
 
         assert response.status_code == 200
-        mock_intent.assert_called_once_with(text="¿Cómo estás hoy?")
+        mock_intent.assert_called_once_with(text="¿Cómo estás hoy?", history=ANY)
         mock_gen_img.assert_called_once_with(prompt="a cosmic cat floating in space")
         mock_upload.assert_called_once()
         mock_send_img.assert_called_once_with(
@@ -270,4 +277,67 @@ async def test_webhook_post_text_message_image_generation_failure_fallback():
         call_args = mock_send_text.call_args[1]
         assert "Disculpa" in call_args["text"] or "dificultad" in call_args["text"] or "inconveniente" in call_args["text"]
         mock_cleanup.assert_called_once()
+
+@pytest.mark.asyncio
+async def test_webhook_post_reset_command_clears_history():
+    reset_payload = {
+        "object": "whatsapp_business_account",
+        "entry": [
+            {
+                "id": "100200300400",
+                "changes": [
+                    {
+                        "value": {
+                            "messaging_product": "whatsapp",
+                            "messages": [
+                                {
+                                    "from": "5491123456789",
+                                    "id": "wamid.reset123",
+                                    "text": {"body": "/reset"},
+                                    "type": "text"
+                                }
+                            ]
+                        },
+                        "field": "messages"
+                    }
+                ]
+            }
+        ]
+    }
+
+    with patch("src.main.clear_conversation_history") as mock_clear, \
+         patch("src.main.send_whatsapp_text_message", new_callable=AsyncMock) as mock_send, \
+         patch("src.main.process_user_message_intent", new_callable=AsyncMock) as mock_intent:
+
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+            response = await ac.post("/webhook", json=reset_payload)
+
+        assert response.status_code == 200
+        mock_clear.assert_called_once_with(phone_number="5491123456789")
+        mock_send.assert_called_once()
+        assert "reiniciado" in mock_send.call_args[1]["text"].lower()
+        mock_intent.assert_not_called()
+
+@pytest.mark.asyncio
+async def test_webhook_post_text_message_saves_history_turn():
+    with patch("src.main.get_conversation_history") as mock_get_history, \
+         patch("src.main.process_user_message_intent", new_callable=AsyncMock) as mock_intent, \
+         patch("src.main.send_whatsapp_text_message", new_callable=AsyncMock) as mock_send, \
+         patch("src.main.add_conversation_turn") as mock_add_turn:
+
+        mock_get_history.return_value = [{"role": "user", "content": "Hola previo"}]
+        mock_intent.return_value = {"generate_image": False, "reply": "Hola! Estoy bien."}
+
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+            response = await ac.post("/webhook", json=META_TEXT_MESSAGE_PAYLOAD)
+
+        assert response.status_code == 200
+        mock_get_history.assert_called_once_with(phone_number="5491123456789")
+        mock_intent.assert_called_once_with(text="¿Cómo estás hoy?", history=[{"role": "user", "content": "Hola previo"}])
+        mock_send.assert_called_once()
+        mock_add_turn.assert_called_once_with(
+            phone_number="5491123456789",
+            user_message="¿Cómo estás hoy?",
+            model_response="Hola! Estoy bien."
+        )
 
