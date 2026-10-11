@@ -1,5 +1,5 @@
 # Spec 003 — Contenerización y Despliegue en la Nube
-Estado: borrador
+Estado: implementada
 
 ## Contexto y objetivo
 Actualmente el chatbot depende de ejecutarse en el entorno local del desarrollador y de túneles temporales hacia Internet (Cloudflare Tunnel). El objetivo de esta especificación es empaquetar la aplicación completa con sus dependencias de Python y del sistema operativo (en particular `ffmpeg`) dentro de un contenedor Docker reproducible, versionar el proyecto en GitHub y desplegarlo en Render (Free Tier) como un Web Service accesible 24/7 con su propio dominio HTTPS público.
