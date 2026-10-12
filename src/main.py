@@ -14,6 +14,7 @@ from src.services.whatsapp_service import (
     send_whatsapp_text_message,
     send_whatsapp_audio_message,
     send_whatsapp_image_message,
+    send_whatsapp_reaction,
     upload_media_file,
 )
 from src.services.media_service import (
@@ -99,6 +100,7 @@ async def receive_webhook(request: Request) -> Dict[str, str]:
             for message in messages:
                 msg_type = message.get("type")
                 from_phone = message.get("from")
+                msg_id = message.get("id")
                 if not from_phone:
                     continue
 
@@ -108,14 +110,28 @@ async def receive_webhook(request: Request) -> Dict[str, str]:
                         # 1. Comprobar comando explícito de reinicio de conversación
                         if is_reset_command(text_body):
                             clear_conversation_history(phone_number=from_phone)
+                            if msg_id:
+                                try:
+                                    await send_whatsapp_reaction(to_phone_number=from_phone, message_id=msg_id, emoji="🔄")
+                                except Exception:
+                                    pass
                             try:
                                 await send_whatsapp_text_message(
                                     to_phone_number=from_phone,
-                                    text="¡Listo! He reiniciado nuestra conversación. ¿De qué te gustaría hablar ahora?"
+                                    text="¡Listo! He reiniciado nuestra conversación. ¿De qué te gustaría hablar ahora? ✨"
                                 )
                             except Exception as wa_err:
                                 logger.error(f"Error al enviar confirmación de reset: {wa_err}", exc_info=True)
                             continue
+
+                        # Reaccionar si el usuario expresa afecto, agradecimiento o alegría
+                        if msg_id:
+                            lower_text = text_body.lower()
+                            if any(w in lower_text for w in ["gracias", "te quiero", "te amo", "genial", "excelente", "lindo"]):
+                                try:
+                                    await send_whatsapp_reaction(to_phone_number=from_phone, message_id=msg_id, emoji="❤️")
+                                except Exception:
+                                    pass
 
                         # 2. Recuperar historial activo de la sesión
                         history = get_conversation_history(phone_number=from_phone)
@@ -181,6 +197,12 @@ async def receive_webhook(request: Request) -> Dict[str, str]:
                     media_id = image_data.get("id")
                     caption = image_data.get("caption")
 
+                    if msg_id:
+                        try:
+                            await send_whatsapp_reaction(to_phone_number=from_phone, message_id=msg_id, emoji="👀")
+                        except Exception:
+                            pass
+
                     if media_id:
                         temp_files = []
                         try:
@@ -218,6 +240,12 @@ async def receive_webhook(request: Request) -> Dict[str, str]:
                 elif msg_type == "audio":
                     audio_data = message.get("audio", {})
                     media_id = audio_data.get("id")
+
+                    if msg_id:
+                        try:
+                            await send_whatsapp_reaction(to_phone_number=from_phone, message_id=msg_id, emoji="👂")
+                        except Exception:
+                            pass
 
                     if media_id:
                         temp_files = []

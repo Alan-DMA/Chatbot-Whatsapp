@@ -341,3 +341,85 @@ async def test_webhook_post_text_message_saves_history_turn():
             model_response="Hola! Estoy bien."
         )
 
+@pytest.mark.asyncio
+async def test_webhook_post_reaction_on_reset():
+    reset_payload = {
+        "object": "whatsapp_business_account",
+        "entry": [
+            {
+                "id": "100200300400",
+                "changes": [
+                    {
+                        "value": {
+                            "messaging_product": "whatsapp",
+                            "messages": [
+                                {
+                                    "from": "5491123456789",
+                                    "id": "wamid.msg_reset_1",
+                                    "text": {"body": "/reset"},
+                                    "type": "text"
+                                }
+                            ]
+                        },
+                        "field": "messages"
+                    }
+                ]
+            }
+        ]
+    }
+
+    with patch("src.main.clear_conversation_history"), \
+         patch("src.main.send_whatsapp_text_message", new_callable=AsyncMock), \
+         patch("src.main.send_whatsapp_reaction", new_callable=AsyncMock) as mock_reaction:
+
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+            response = await ac.post("/webhook", json=reset_payload)
+
+        assert response.status_code == 200
+        mock_reaction.assert_called_once_with(
+            to_phone_number="5491123456789",
+            message_id="wamid.msg_reset_1",
+            emoji="🔄"
+        )
+
+@pytest.mark.asyncio
+async def test_webhook_post_reaction_on_affection_or_thanks():
+    thanks_payload = {
+        "object": "whatsapp_business_account",
+        "entry": [
+            {
+                "id": "100200300400",
+                "changes": [
+                    {
+                        "value": {
+                            "messaging_product": "whatsapp",
+                            "messages": [
+                                {
+                                    "from": "5491123456789",
+                                    "id": "wamid.msg_thanks_1",
+                                    "text": {"body": "Muchas gracias, te quiero!"},
+                                    "type": "text"
+                                }
+                            ]
+                        },
+                        "field": "messages"
+                    }
+                ]
+            }
+        ]
+    }
+
+    with patch("src.main.process_user_message_intent", new_callable=AsyncMock) as mock_intent, \
+         patch("src.main.send_whatsapp_text_message", new_callable=AsyncMock), \
+         patch("src.main.send_whatsapp_reaction", new_callable=AsyncMock) as mock_reaction:
+
+        mock_intent.return_value = {"generate_image": False, "reply": "¡De nada! ❤️"}
+
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+            response = await ac.post("/webhook", json=thanks_payload)
+
+        assert response.status_code == 200
+        mock_reaction.assert_called_once()
+        assert mock_reaction.call_args[1]["emoji"] in ["❤️", "😊", "✨"]
+
+

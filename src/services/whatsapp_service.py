@@ -129,3 +129,37 @@ async def send_whatsapp_image_message(
         response.raise_for_status()
         return response.json()
 
+async def send_whatsapp_reaction(
+    to_phone_number: str,
+    message_id: str,
+    emoji: str
+) -> Dict[str, Any]:
+    """
+    Envía una reacción (emoji) sobre un mensaje específico en WhatsApp Cloud API.
+    Endpoint: POST https://graph.facebook.com/v21.0/{PHONE_NUMBER_ID}/messages
+    """
+    settings = get_settings()
+    url = f"https://graph.facebook.com/{META_GRAPH_API_VERSION}/{settings.PHONE_NUMBER_ID}/messages"
+
+    headers = {
+        "Authorization": f"Bearer {settings.WHATSAPP_TOKEN}",
+        "Content-Type": "application/json"
+    }
+
+    payload = {
+        "messaging_product": "whatsapp",
+        "recipient_type": "individual",
+        "to": to_phone_number,
+        "type": "reaction",
+        "reaction": {
+            "message_id": message_id,
+            "emoji": emoji
+        }
+    }
+
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        response = await client.post(url, json=payload, headers=headers)
+        response.raise_for_status()
+        return response.json()
+
+

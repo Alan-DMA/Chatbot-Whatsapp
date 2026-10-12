@@ -171,3 +171,33 @@ async def test_send_whatsapp_image_message_without_caption(monkeypatch):
         assert call_kwargs["json"]["image"]["id"] == "media_img_999"
         assert "caption" not in call_kwargs["json"]["image"]
 
+@pytest.mark.asyncio
+async def test_send_whatsapp_reaction_success(monkeypatch):
+    monkeypatch.setenv("WHATSAPP_TOKEN", "fake_token_123")
+    monkeypatch.setenv("PHONE_NUMBER_ID", "10987654321")
+    from src.config import get_settings
+    get_settings.cache_clear()
+    from src.services.whatsapp_service import send_whatsapp_reaction
+
+    dummy_request = httpx.Request("POST", "https://graph.facebook.com/v21.0/10987654321/messages")
+    mock_response = httpx.Response(
+        status_code=200,
+        json={"success": True},
+        request=dummy_request
+    )
+
+    with patch("httpx.AsyncClient.post", new_callable=AsyncMock) as mock_post:
+        mock_post.return_value = mock_response
+        res = await send_whatsapp_reaction(
+            to_phone_number="123456789",
+            message_id="wamid.HBgL...",
+            emoji="👍"
+        )
+        assert res["success"] is True
+        mock_post.assert_called_once()
+        call_kwargs = mock_post.call_args[1]
+        assert call_kwargs["json"]["type"] == "reaction"
+        assert call_kwargs["json"]["reaction"]["message_id"] == "wamid.HBgL..."
+        assert call_kwargs["json"]["reaction"]["emoji"] == "👍"
+
+
